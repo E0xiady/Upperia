@@ -1,0 +1,67 @@
+@echo off
+Setlocal EnableDelayedExpansion
+rem https://stackoverflow.com/questions/2720014/
+
+echo Upgrading pip...
+python -m pip install --upgrade pip
+echo.
+
+echo Upgrading packages...
+set upgrade_count=0
+pip list --outdated > pip-upgrade-outdated.txt
+for /F "skip=2 tokens=1,3 delims= " %%i in (pip-upgrade-outdated.txt) do (
+    echo ^>%%i
+    set package=%%i
+    set latest=%%j
+    set requirements=!package!
+
+    rem for each outdated package check for any version requirements:
+    set dotest=1
+    for /F %%r in (.\python\requirements.txt) do (
+        if !dotest!==1 (
+            call :substr "%%r" !package! _substr
+            rem check if a given line refers to a package we are about to upgrade:
+            if "%%r" NEQ !_substr! (
+                rem check if the line contains more than just a package name:
+                if "%%r" NEQ "!package!" (
+                    rem set requirements to the contents of the line:
+                    echo requirements: %%r, latest: !latest!
+                    set requirements=%%r
+                )
+                rem stop testing after the first instance found,
+                rem prevents from mistakenly matching "py" with "pylint", "numpy" etc.
+                rem requirements.txt must be structured with shorter names going first
+                set dotest=0
+            )
+        )
+    )
+    rem pip install !requirements!
+    pip install --upgrade !requirements!
+    set /a "upgrade_count+=1"
+    echo.
+)
+
+if !upgrade_count!==0 (
+    echo All packages are up to date.
+) else (
+    type pip-upgrade-outdated.txt
+)
+
+if "%1" neq "-silent" (
+    echo.
+    set /p temp="> Press Enter to exit..."
+)
+exit /b
+
+
+:substr
+rem string substition done in a separate subroutine -
+rem allows expand both variables in the substring syntax.
+rem replaces str_search with an empty string.
+rem returns the result in the 3rd parameter, passed by reference from the caller.
+set str_source=%1
+set str_search=%2
+set str_result=!str_source:%str_search%=!
+set "%~3=!str_result!"
+rem echo !str_source!, !str_search!, !str_result!
+exit /b
